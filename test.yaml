@@ -1,0 +1,72 @@
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-example
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: deployment-example
+#Простого горизонтального масштабирования по ЦПУ, должно быть достаточно. Я выбрал значение в 70% от лимита, для увеличения количества реплик.
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+---
+apiVersion: v1
+kind: Service
+#Предполагаю, что нагрузка балансится через балансировщик, скорее всего nginx, так что выбрал Service
+metadata:
+  name:  deployment-example
+  labels:
+    name:  deployment-example
+spec:
+  ports:
+  - port: 80
+  selector:
+    name:  deployment-example
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  deployment-example
+  labels:
+    name:  deployment-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name:  deployment-example
+  template:
+    metadata:
+      labels:
+        name:  deployment-example
+    spec:
+      containers:
+      - name: test
+        image: test:tag
+        ports:
+        - containerPort: 80
+#Определим request по памяти, т.к. ее значение стабильно. И определим лимит по ЦПУ, для HPA.
+	resources:
+          requests:
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+		livenessProbe:
+          httpGet:
+          path: /healthz
+          port: 80
+          httpHeaders:
+          - name: Custom-Header
+            value: Awesome
+          initialDelaySeconds: 3
+          periodSeconds: 3
+#Добавлена readinessProbe, для описания времени поднятия пода, в соответствии с условиями задачи.
+	  readinessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
